@@ -1,3 +1,5 @@
+// Shell.
+
 #include "types.h"
 #include "user.h"
 #include "fcntl.h"
@@ -64,7 +66,7 @@ runcmd(struct cmd *cmd)
 
   if(cmd == 0)
     exit();
-
+  
   switch(cmd->type){
   default:
     panic("runcmd");
@@ -74,7 +76,7 @@ runcmd(struct cmd *cmd)
     if(ecmd->argv[0] == 0)
       exit();
     exec(ecmd->argv[0], ecmd->argv);
-    printf(2, "cannot run this command %s \n", ecmd->argv[0]);
+    printf(2, "Cannot run this command %s \n", ecmd->argv[0]);
     break;
 
   case REDIR:
@@ -118,13 +120,17 @@ runcmd(struct cmd *cmd)
     wait();
     wait();
     break;
-
+    
   case BACK:
     bcmd = (struct backcmd*)cmd;
-    if(fork1() == 0)
-      runcmd(bcmd->cmd);
-    break;
+    //if(fork1() > 0)
+    //{
+      printf(2, "[pid %d] runs as a background process. \nxvsh>", getpid());		//HW1 - 2.3	
+      runcmd(bcmd->cmd);		    
+    //}
+   break;
   }
+
   exit();
 }
 
@@ -139,49 +145,38 @@ getcmd(char *buf, int nbuf)
   return 0;
 }
 
-
-/*int
-runThisFirst(){
-	if(fork1()==0)
-		runcmd(parsecmd("ln ls dir"));
-	wait();
-	if(fork1()==0)
-		runcmd(parsecmd("ln clear clc"));
-	wait();
-	return 0;
-}*/
-// Block ends here
-
 int
 main(void)
 {
   static char buf[100];
   int fd;
-
-  // Ensure that three file descriptors are open.
+  
+  // Assumes three file descriptors open.
   while((fd = open("console", O_RDWR)) >= 0){
     if(fd >= 3){
       close(fd);
       break;
     }
   }
-
   
-  //runThisFirst();
-
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
     if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
-      // Chdir must be called by the parent, not the child.
+      // Clumsy but will have to do for now.
+      // Chdir has no effect on the parent if run in the child.
       buf[strlen(buf)-1] = 0;  // chop \n
       if(chdir(buf+3) < 0)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
-    }
+    }	if(buf[0]=='e' && buf[1]=='x' &&  buf[2]=='i' && buf[3]=='t')
+		exit();
+
 
     if(fork1() == 0)
       runcmd(parsecmd(buf));
-    wait();
+
+    	//wait(); //HW1 - 2.2
+
   }
   exit();
 }
@@ -197,7 +192,7 @@ int
 fork1(void)
 {
   int pid;
-
+  
   pid = fork();
   if(pid == -1)
     panic("fork");
@@ -282,7 +277,7 @@ gettoken(char **ps, char *es, char **q, char **eq)
 {
   char *s;
   int ret;
-
+  
   s = *ps;
   while(s < es && strchr(whitespace, *s))
     s++;
@@ -315,7 +310,7 @@ gettoken(char **ps, char *es, char **q, char **eq)
   }
   if(eq)
     *eq = s;
-
+  
   while(s < es && strchr(whitespace, *s))
     s++;
   *ps = s;
@@ -326,7 +321,7 @@ int
 peek(char **ps, char *es, char *toks)
 {
   char *s;
-
+  
   s = *ps;
   while(s < es && strchr(whitespace, *s))
     s++;
@@ -434,7 +429,7 @@ parseexec(char **ps, char *es)
   int tok, argc;
   struct execcmd *cmd;
   struct cmd *ret;
-
+  
   if(peek(ps, es, "("))
     return parseblock(ps, es);
 
@@ -473,7 +468,7 @@ nulterminate(struct cmd *cmd)
 
   if(cmd == 0)
     return 0;
-
+  
   switch(cmd->type){
   case EXEC:
     ecmd = (struct execcmd*)cmd;
@@ -492,7 +487,7 @@ nulterminate(struct cmd *cmd)
     nulterminate(pcmd->left);
     nulterminate(pcmd->right);
     break;
-
+    
   case LIST:
     lcmd = (struct listcmd*)cmd;
     nulterminate(lcmd->left);

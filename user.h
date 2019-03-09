@@ -23,7 +23,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
-int shutdown(void);
+void shutdown(void);	//HW1 - 2.1 implementation
 
 // ulib.c
 int stat(char*, struct stat*);
