@@ -23,7 +23,6 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
-void shutdown(void);	//HW1 - 2.1 implementation
 
 // ulib.c
 int stat(char*, struct stat*);
@@ -40,3 +39,4 @@ void free(void*);
 int atoi(const char*);
 
 void enable_sched_trace(int enable);
+void shutdown(void);

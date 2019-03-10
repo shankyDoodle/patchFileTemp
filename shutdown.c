@@ -1,7 +1,6 @@
 #include "types.h"
 #include "stat.h"
 #include "user.h"
-//#include "x86.h"
 
 /* CS550 ATTENTION: to ensure correct compilation of the base code, 
    stub functions for the system call user space wrapper functions are provided. 
@@ -9,7 +8,7 @@
    allow your implementation to work properly. */
 #define STUB_FUNCS
 #ifdef STUB_FUNCS
-
+//void shutdown(void) {}
 #endif
 
 
@@ -20,4 +19,3 @@ main(int argc, char * argv[])
     shutdown();
     exit(); //return 0;
 }
-
