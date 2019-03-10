@@ -29,20 +29,16 @@ struct backcmd {
     struct cmd *cmd;
 };
 
-int fork1(void);
+int forkWrapper(void);
 
 void showError(char *);
 
-struct cmd *parsecmd(char *);
+struct cmd *parseCmd(char *);
 
 void runCommand(struct cmd *cmd) {
-  int pipeFd[2];
   struct backcmd *bcmd;
   struct execcmd *ecmd;
   struct pipecmd *pcmd;
-
-  if (cmd == 0)
-    exit();
 
   switch (cmd->type) {
     case EXEC:
@@ -56,13 +52,14 @@ void runCommand(struct cmd *cmd) {
 
 
     case PIPE:
+      int pipeFd[2];
       pcmd = (struct pipecmd *) cmd;
 
-      if (pipe(pipeFd) < 0){
-        showError("pipe");
+      if (pipe(pipeFd) < 0) {
+        showError("pipeFail");
       }
 
-      if (fork1() == 0) {
+      if (forkWrapper() == 0) {
         close(1);
         dup(pipeFd[1]);
         close(pipeFd[0]);
@@ -70,7 +67,7 @@ void runCommand(struct cmd *cmd) {
         runCommand(pcmd->left);
       }
 
-      if (fork1() == 0) {
+      if (forkWrapper() == 0) {
         close(0);
         dup(pipeFd[0]);
         close(pipeFd[0]);
@@ -111,13 +108,13 @@ int main(void) {
   static char buf[100];
 
   while (getcmd(buf, sizeof(buf)) >= 0) {
-    if (buf[0] == 'e' && buf[1] == 'x' && buf[2] == 'i' && buf[3] == 't'){
+    if (buf[0] == 'e' && buf[1] == 'x' && buf[2] == 'i' && buf[3] == 't') {
       //  printf(2,"in Exit.. check me");
       exit();
     }
 
-    if (fork1() == 0) {
-      runCommand(parsecmd(buf));
+    if (forkWrapper() == 0) {
+      runCommand(parseCmd(buf));
     }
 
     wait();
@@ -130,10 +127,11 @@ void showError(char *msg) {
   exit();
 }
 
-int fork1(void) {
+int forkWrapper(void) {
+  //  printf(2,"in forkWrapper..\n");
   int pid = fork();
-  if (pid == -1){
-    showError("fork");
+  if (pid == -1) {
+    showError("forkFailed");
   }
   return pid;
 }
@@ -171,154 +169,153 @@ struct cmd *backcmd(struct cmd *subcmd) {
 char whitespace[] = " \t\r\n\v";
 char symbols[] = "|&";
 
-int gettoken(char **ps, char *es, char **q, char **eq) {
-  char *s;
-  int ret;
+int getTokens(char **pStr, char *eStr, char **qPtr, char **eqPtr) {
+  char *str;
+  int retVal;
 
-  s = *ps;
-  while (s < es && strchr(whitespace, *s)) {
-    s++;
+  str = *pStr;
+  while (str < eStr && strchr(whitespace, *str)) {
+    str++;
   }
 
-  if (q) {
-    *q = s;
+  if (qPtr) {
+    *qPtr = str;
   }
-  ret = *s;
+  retVal = *str;
 
-  switch (*s) {
+  switch (*str) {
     case 0:
       break;
 
     case '|':
     case '&':
-      s++;
+      str++;
       break;
 
     default:
-      ret = 'a';
-      while (s < es && !strchr(whitespace, *s) && !strchr(symbols, *s))
-        s++;
+      retVal = 'a';
+      while (str < eStr && !strchr(whitespace, *str) && !strchr(symbols, *str)){
+        str++;
+      }
       break;
   }
 
-  if (eq) {
-    *eq = s;
+  if (eqPtr) {
+    *eqPtr = str;
   }
 
-  while (s < es && strchr(whitespace, *s)) {
-    s++;
+  while (str < eStr && strchr(whitespace, *str)) {
+    str++;
   }
 
-  *ps = s;
-  return ret;
+  *pStr = str;
+  return retVal;
 }
 
-int peek(char **ps, char *es, char *toks) {
-  char *s;
+int findChar(char **pStr, char *eStr, char *tokens) {
+  char *str;
 
-  s = *ps;
-  while (s < es && strchr(whitespace, *s))
-    s++;
-  *ps = s;
-  return *s && strchr(toks, *s);
+  str = *pStr;
+  while (str < eStr && strchr(whitespace, *str)) {
+    str++;
+  }
+  *pStr = str;
+  return *str && strchr(tokens, *str);
 }
 
-struct cmd *parseline(char **, char *);
+struct cmd *parseLine(char **, char *);
 
-struct cmd *parsepipe(char **, char *);
+struct cmd *parsePipe(char **, char *);
 
-struct cmd *parseexec(char **, char *);
+struct cmd *parseExec(char **, char *);
 
 struct cmd *flushStructs(struct cmd *);
 
-struct cmd *parsecmd(char *s) {
-  char *es;
+struct cmd *parseCmd(char *str) {
+  char *eStr;
   struct cmd *cmd;
 
-  es = s + strlen(s);
-  cmd = parseline(&s, es);
-  peek(&s, es, "");
-  if (s != es) {
-    printf(2, "leftovers: %s\n", s);
-    showError("syntax");
+  eStr = str + strlen(str);
+  cmd = parseLine(&str, eStr);
+  findChar(&str, eStr, "");
+  if (str != eStr) {
+    printf(2, "remains: %s\n", str);
+    showError("syntaxError");
   }
   flushStructs(cmd);
   return cmd;
 }
 
-struct cmd *parseline(char **ps, char *es) {
+struct cmd *parseLine(char **pStr, char *eStr) {
   struct cmd *cmd;
 
-  cmd = parsepipe(ps, es);
-  while (peek(ps, es, "&")) {
-    gettoken(ps, es, 0, 0);
+  cmd = parsePipe(pStr, eStr);
+  while (findChar(pStr, eStr, "&")) {
+    getTokens(pStr, eStr, 0, 0);
     cmd = backcmd(cmd);
   }
   return cmd;
 }
 
-struct cmd *parsepipe(char **ps, char *es) {
+struct cmd *parsePipe(char **pStr, char *eStr) {
   struct cmd *cmd;
 
-  cmd = parseexec(ps, es);
-  if (peek(ps, es, "|")) {
-    gettoken(ps, es, 0, 0);
-    cmd = pipecmd(cmd, parsepipe(ps, es));
+  cmd = parseExec(pStr, eStr);
+  if (findChar(pStr, eStr, "|")) {
+    getTokens(pStr, eStr, 0, 0);
+    cmd = pipecmd(cmd, parsePipe(pStr, eStr));
   }
   return cmd;
 }
 
-struct cmd *parseexec(char **ps, char *es) {
-  char *q, *eq;
-  int tok, argc;
+struct cmd *parseExec(char **pStr, char *eStr) {
+  char *qPtr, *eqPtr;
+  int token, argc = 0;
   struct execcmd *cmd;
-  struct cmd *ret;
+  struct cmd *retVal;
 
-  ret = execcmd();
-  cmd = (struct execcmd *) ret;
+  retVal = execcmd();
+  cmd = (struct execcmd *) retVal;
 
-  argc = 0;
-  while (!peek(ps, es, "|&")) {
-    if ((tok = gettoken(ps, es, &q, &eq)) == 0){
+  while (!findChar(pStr, eStr, "|&")) {
+    if ((token = getTokens(pStr, eStr, &qPtr, &eqPtr)) == 0) {
       break;
     }
-    if (tok != 'a'){
+    if (token != 'a') {
       showError("syntax");
     }
-    cmd->argv[argc] = q;
-    cmd->eargv[argc] = eq;
+    cmd->argv[argc] = qPtr;
+    cmd->eargv[argc] = eqPtr;
     argc++;
   }
   cmd->argv[argc] = 0;
   cmd->eargv[argc] = 0;
-  return ret;
+  return retVal;
 }
 
-// NUL-terminate all the counted strings.
+//flush all data
 struct cmd *flushStructs(struct cmd *cmd) {
-  struct backcmd *bcmd;
-  struct execcmd *ecmd;
-  struct pipecmd *pcmd;
-
-  if (cmd == 0)
-    return 0;
+  struct backcmd *backc;
+  struct execcmd *execc;
+  struct pipecmd *pipec;
 
   switch (cmd->type) {
     case EXEC:
-      ecmd = (struct execcmd *) cmd;
-      for (int i = 0; ecmd->argv[i]; i++)
-        *ecmd->eargv[i] = 0;
+      execc = (struct execcmd *) cmd;
+      for (int i = 0; execc->argv[i]; i++) {
+        *execc->eargv[i] = 0;
+      }
       break;
 
     case PIPE:
-      pcmd = (struct pipecmd *) cmd;
-      flushStructs(pcmd->left);
-      flushStructs(pcmd->right);
+      pipec = (struct pipecmd *) cmd;
+      flushStructs(pipec->left);
+      flushStructs(pipec->right);
       break;
 
     case BACK:
-      bcmd = (struct backcmd *) cmd;
-      flushStructs(bcmd->cmd);
+      backc = (struct backcmd *) cmd;
+      flushStructs(backc->cmd);
       break;
   }
   return cmd;
